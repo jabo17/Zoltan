@@ -62,6 +62,13 @@ extern "C" {
 int HG_readfile (int, ZOLTAN_FILE*, int*, int*, int*, int**, int**, int*,
  float**, int*, float**, int*);
 
+/* Opt-in uncompressed .hg reader; arrays initially contain consecutive edges
+ * from this rank's byte range.  Redistribution preserves the legacy order. */
+int HG_readfile_parallel(const char *, int *, int *, int *, int *, int *,
+ int **, int **, int *, float **, int *, float **, int *);
+int HG_dist_parallel(PARIO_INFO_PTR, int, int, int *, int, int **, int **,
+ int **, int **, int, float **, short *);
+
 /* MatrixMarket read from file */
 int MM_readfile (int, int, ZOLTAN_FILE*, PARIO_INFO_PTR, int*, int*, int*, int**, int**, int*,
  float**, int*, float**, int**, int**, int*, float**, int*, int*);

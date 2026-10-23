@@ -220,6 +220,13 @@ int read_cmd_file (
 	  keepreading += nread;
 	  if (nread == 2){
 	    if (!strcmp(string, "read")) {
+      if (!strcmp(value, "parallel")) {
+        if (pio_info->file_type != HYPERGRAPH_FILE) {
+          Gen_Error(0, "fatal: initial read=parallel requires file type hypergraph");
+          return 0;
+        }
+        pio_info->chunk_reader = 2;
+      }
 	      if ((value[0] == 'c') && (value[1] == 'h') &&
 		  (value[2] == 'u') &&(value[3] == 'n') &&(value[4] == 'k')){
 		pio_info->chunk_reader = 1;
