@@ -158,6 +158,7 @@ int read_hypergraph_file(
   char   cmesg[FILENAME_MAX+256];
 
   int    i, distributed_pins = 0, vertex, nextEdge;
+  int parallel_hg = (pio_info->chunk_reader == 2), first_edge = 0;
   int    nvtxs = 0, nhedges = 0, npins = 0;
   int    vwgt_dim=0, hewgt_dim=0, vtx, edgeSize;
   int   *hindex = NULL, *hvertex_proc = NULL;
@@ -195,7 +196,13 @@ int read_hypergraph_file(
 
   DEBUG_TRACE_START(Proc, yo);
 
-  if (Proc == 0) {
+  if (parallel_hg && (pio_info->file_type != HYPERGRAPH_FILE ||
+                      pio_info->file_comp != STANDARD)) {
+    Gen_Error(0, "fatal: parallel HG input requires an uncompressed .hg file");
+    return 0;
+  }
+
+  if (Proc == 0 && !parallel_hg) {
 
     /* Open and read the hypergraph file. */
     if (pio_info->file_type == HYPERGRAPH_FILE)
@@ -223,7 +230,16 @@ int read_hypergraph_file(
     return 0;
   }
 
-  if (pio_info->file_type == HYPERGRAPH_FILE) {
+  if (parallel_hg) {
+    sprintf(filename, "%s.hg", pio_info->pexo_fname);
+    if (!HG_readfile_parallel(filename, &nvtxs, &gnhedges, &npins,
+          &first_edge, &nhedges, &hindex, &hvertex, &vwgt_dim, &vwgts,
+          &hewgt_dim, &hewgts, &base)) {
+      Gen_Error(0, "fatal: Error returned from HG_readfile_parallel");
+      return 0;
+    }
+  }
+  else if (pio_info->file_type == HYPERGRAPH_FILE) {
     /* read the array in on processor 0 */
     if (Proc == 0) {
       if (HG_readfile(Proc, fp, &nvtxs, &nhedges, &npins,
@@ -411,7 +427,15 @@ int read_hypergraph_file(
       return 0;
     }
 
-    if (!dist_hyperedges(MPI_COMM_WORLD, pio_info, 0, base, gnvtxs, &gnhedges,
+    if (parallel_hg) {
+      if (!HG_dist_parallel(pio_info, base, gnhedges, &nhedges, first_edge,
+             &hgid, &hindex, &hvertex, &hvertex_proc, hewgt_dim, &hewgts,
+             ch_assignments)) {
+        Gen_Error(0, "fatal: Error returned from HG_dist_parallel");
+        return 0;
+      }
+    }
+    else if (!dist_hyperedges(MPI_COMM_WORLD, pio_info, 0, base, gnvtxs, &gnhedges,
 		       &nhedges, &hgid, &hindex, &hvertex, &hvertex_proc,
 		       &hewgt_dim, &hewgts, ch_assignments)) {
       Gen_Error(0, "fatal: Error returned from dist_hyperedges");
