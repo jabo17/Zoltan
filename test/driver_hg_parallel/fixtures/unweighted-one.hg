@@ -1,0 +1,6 @@
+% One-based IBM format: 6 vertices, 4 edges, 8 pins, no weights.
+6 4 8 00
+1 2
+2 3 4
+4 5
+6

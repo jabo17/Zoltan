@@ -49,8 +49,8 @@ def fixture(path, nv=17, base=1, vd=0, ed=0, patoh=False, empty=False, long=Fals
 def assignments(directory, nranks):
     parts = {}
     for rank in range(nranks):
-        path = directory / f'graph.out.{nranks}.{rank}'
-        # Driver naming zero-pads ranks only at >=10 processes.
+        width = len(str(nranks))
+        path = directory / f'graph.out.{nranks}.{rank:0{width}d}'
         text = path.read_text().split('GID\tPart\tPerm\tIPerm\n', 1)[1]
         for line in text.splitlines():
             fields = list(map(int, line.split()))

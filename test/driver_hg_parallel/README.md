@@ -1,5 +1,58 @@
 # Parallel native hypergraph input
 
+## Small suite you can inspect and run
+
+After building the MPI driver, run this from the source root. `--build` is the
+configured **Autotools build directory**, using the same MPI installation as
+`mpicc` and `mpirun`:
+
+```sh
+python3 test/driver_hg_parallel/check_reader.py \
+  --build /path/to/build --ranks 1,2,4 \
+  --output /tmp/zoltan-reader-check
+```
+
+Use a new output directory each time. The script compiles the small C comparison
+probe automatically and keeps all files for inspection. On a cluster, run inside
+an allocation with enough cores. `--mpicc`, `--mpiexec`, and `--mpi-args` let you
+select the matching MPI compiler and launcher. You can use `--ranks 1,8` to
+include ranks with no initial vertices or edges. No Python packages are required.
+
+The fixtures contain six vertices and four edges:
+
+- `fixtures/weighted-zero.hg`: zero-based PaToH input with vertex/edge weights.
+- `fixtures/unweighted-one.hg`: one-based IBM input without weights.
+- `fixtures/expected.json`: supplied assignments with hand-computed objectives
+  and balance, including a three-part example where cut-net and km1 differ.
+
+The checks are:
+
+1. Validate the Python objective evaluator against those hand-worked examples.
+2. Compare each rank's old/new reader arrays byte for byte under linear,
+   cyclic, and owner distribution: offsets, IDs, ordered pins, owners and weights.
+3. Run both readers with identical PHG parameters and seed for both cut objectives.
+   Require identical final assignments; independently calculate cut-net, km1,
+   partition weights and imbalance from the original text file. Also compare
+   the calculated objectives with the driver's final evaluation.
+
+`expected.json` describes the supplied example assignments; actual PHG output is
+evaluated separately. Tiny weighted cases use an imbalance tolerance of 1.5 to
+accommodate coarse vertex weights. Both readers use exactly the same settings.
+
+For `--ranks 1,2,4`, successful output ends with:
+
+```text
+PASS: 18 exact input comparisons and 12 final partition comparisons. Results: ...
+```
+
+Inspect `summary.json`, each case's `zdrive.inp`, `run.log`, `assignments.json`,
+`metrics.json`, and the native `graph.out.*` files in the output directory.
+Probe logs end with `Exact per-rank reader equality: PASS`. Any mismatch or
+command failure causes a nonzero exit status. The larger suite described below
+also checks malformed files, empty edges, long records and vector weights.
+
+## Reader behavior
+
 The C driver (`zdrive`) can load an **uncompressed native `.hg` file** with
 parallel MPI-IO and parallel text parsing. Select it explicitly in `zdrive.inp`:
 
