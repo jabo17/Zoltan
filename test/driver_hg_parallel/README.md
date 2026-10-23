@@ -1,17 +1,29 @@
 # Parallel native hypergraph input
 
-## Simplest check: two runs, one graph, eight ranks
+## Simplest check: two runs, one graph
 
 ```sh
 bash test/driver_hg_parallel/simple/compare.sh \
   /path/to/build/src/driver/zdrive.exe /path/to/graph.hg /tmp/reader-comparison
 ```
 
-Run inside an allocation with eight cores and use a new output directory.
-The script runs `mpirun -np 8` once with `simple/old.inp`, once with
+Edit the settings at the top of `simple/compare.sh`, or provide them as environment
+variables. Defaults are eight cores and two blocks. For example:
+
+```sh
+ZDRIVE=/path/to/zdrive.exe HYPERGRAPH=/path/to/graph.hg \
+  CORES=8 BLOCKS=16 OUTPUT_DIR=/tmp/reader-comparison-16 \
+  bash test/driver_hg_parallel/simple/compare.sh
+```
+
+Core count selects MPI ranks (one per core); block count selects partition parts.
+They can differ. The script writes the chosen block count into both copied input
+files. Positional binary, graph and output arguments still override those settings.
+Run inside an allocation with enough cores and use a new output directory.
+The script runs MPI once with `simple/old.inp`, once with
 `simple/parallel.inp`, then greps the final `CUTL` (connectivity/km1) after load
 balancing and checks equality. The two input files differ only in reader
-selection and follow the settings supplied in this conversation (two parts,
+selection and follow the settings supplied in this conversation (by default two parts,
 seed 2, imbalance tolerance 1.03, IPM coarsening, no refinement). Driver debug
 level 1 enables objective reporting. Logs and copied input files stay in the
 output directory. Set `MPIEXEC=mpiexec` to use a different launcher executable.
