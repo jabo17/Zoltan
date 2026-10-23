@@ -1,5 +1,26 @@
 # Parallel native hypergraph input
 
+## Simplest check: two runs, one graph, eight ranks
+
+```sh
+bash test/driver_hg_parallel/simple/compare.sh \
+  /path/to/build/src/driver/zdrive.exe /path/to/graph.hg /tmp/reader-comparison
+```
+
+Run inside an allocation with eight cores and use a new output directory.
+The script runs `mpirun -np 8` once with `simple/old.inp`, once with
+`simple/parallel.inp`, then greps the final `CUTL` (connectivity/km1) after load
+balancing and checks equality. The two input files differ only in reader
+selection and follow the settings supplied in this conversation (two parts,
+seed 2, imbalance tolerance 1.03, IPM coarsening, no refinement). Driver debug
+level 1 enables objective reporting. Logs and copied input files stay in the
+output directory. Set `MPIEXEC=mpiexec` to use a different launcher executable.
+
+This compares the printed objectives, which the driver rounds to three decimal
+places. It does not compare assignments or prove full reader equivalence; the
+more detailed suite below performs those checks. For the integer-weight
+webbase example, the printed objective is an integer.
+
 ## Small suite you can inspect and run
 
 After building the MPI driver, run this from the source root. `--build` is the
