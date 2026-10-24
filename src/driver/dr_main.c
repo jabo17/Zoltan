@@ -64,6 +64,7 @@
 #include <signal.h>
 
 #include "dr_const.h"
+#include "dr_externs.h"
 #include "dr_input_const.h"
 #include "dr_loadbal_const.h"
 #include "dr_util_const.h"
@@ -130,36 +131,6 @@ void meminfo_signal_handler(int sig)
 /****************************************************************************/
 /****************************************************************************/
 /****************************************************************************/
-
-/* Every rank must enter/end each section in the same order.  stderr is
- * flushed so progress remains visible with redirected batch output. */
-double driver_timer_begin(const char *section)
-{
-  int rank;
-  double start = MPI_Wtime();
-  MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-  if (!rank) {
-    fprintf(stderr, "ZDRIVE TIMER BEGIN %s\n", section);
-    fflush(stderr);
-  }
-  return start;
-}
-
-void driver_timer_end(const char *section, double start)
-{
-  int rank, size;
-  double elapsed = MPI_Wtime() - start, lo, hi, sum;
-  MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-  MPI_Comm_size(MPI_COMM_WORLD, &size);
-  MPI_Reduce(&elapsed, &lo, 1, MPI_DOUBLE, MPI_MIN, 0, MPI_COMM_WORLD);
-  MPI_Reduce(&elapsed, &hi, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
-  MPI_Reduce(&elapsed, &sum, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
-  if (!rank) {
-    fprintf(stderr, "ZDRIVE TIMER END %s: min=%.6f mean=%.6f max=%.6f seconds\n",
-            section, lo, sum/size, hi);
-    fflush(stderr);
-  }
-}
 
 int main(int argc, char *argv[])
 {
