@@ -618,6 +618,7 @@ int run_zoltan(struct Zoltan_Struct *zz, int Proc, PROB_INFO_PTR prob,
   int errcnt, gerrcnt;
   int ierr=ZOLTAN_OK;
   double stime = 0.0, mytime = 0.0, maxtime = 0.0;
+  double diagnostic_start;
   char fname[128];
   ELEM_INFO *current_elem = NULL;
 
@@ -629,6 +630,7 @@ int run_zoltan(struct Zoltan_Struct *zz, int Proc, PROB_INFO_PTR prob,
 
     /* Load balancing part */
 
+    diagnostic_start = driver_timer_begin("initial_evaluation");
     /* Evaluate the old balance */
     if (Debug_Driver > 0) {
       if (Proc == 0) printf("\nBEFORE load balancing\n");
@@ -637,6 +639,7 @@ int run_zoltan(struct Zoltan_Struct *zz, int Proc, PROB_INFO_PTR prob,
       i = Zoltan_LB_Eval(zz, 1, NULL, NULL, NULL);
       if (i) printf("Warning: Zoltan_LB_Eval returned code %d\n", i);
     }
+    driver_timer_end("initial_evaluation", diagnostic_start);
     if (Test.Gen_Files) {
       /* Write output files. */
       strcpy(fname, pio_info->pexo_fname);
@@ -657,6 +660,7 @@ int run_zoltan(struct Zoltan_Struct *zz, int Proc, PROB_INFO_PTR prob,
     MPI_Barrier(MPI_COMM_WORLD);   /* For timings only */
     stime = MPI_Wtime();
 
+    diagnostic_start = driver_timer_begin("partition_including_algorithm_setup");
     ierr = Zoltan_LB_Partition(zz, &new_decomp,
 		 &num_gid_entries, &num_lid_entries,
 		 &num_imported, &import_gids,
@@ -670,10 +674,12 @@ int run_zoltan(struct Zoltan_Struct *zz, int Proc, PROB_INFO_PTR prob,
     }
 
     mytime = MPI_Wtime() - stime;
+    driver_timer_end("partition_including_algorithm_setup", diagnostic_start);
     MPI_Allreduce(&mytime, &maxtime, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
     if (Proc == 0)
       printf("\nDRIVER:  Zoltan_LB_Partition time = %g\n", maxtime);
     Total_Partition_Time += maxtime;
+    diagnostic_start = driver_timer_begin("partition_result_processing");
 
 #ifdef TIMER_CALLBACKS
     MPI_Allreduce(&Timer_Callback_Time, &Timer_Global_Callback_Time,
@@ -733,6 +739,8 @@ exit(-1);
     /*
      * Call another routine to perform the migration
      */
+    driver_timer_end("partition_result_processing", diagnostic_start);
+    diagnostic_start = driver_timer_begin("migration_including_barrier");
     MPI_Barrier(MPI_COMM_WORLD);   /* For timings only */
     stime = MPI_Wtime();
     if (new_decomp && (num_exported != -1 || num_imported != -1)) {
@@ -780,6 +788,8 @@ exit(-1);
     MPI_Allreduce(&mytime, &maxtime, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
     if (Proc == 0)
       printf("DRIVER:  Total migration time = %g\n", maxtime);
+    driver_timer_end("migration_including_barrier", diagnostic_start);
+    diagnostic_start = driver_timer_begin("postmigration_checks_and_zoltan_copy");
 
     /* Test whether Fixed Object assignments are correct */
     if (Test.Fixed_Objects) {
@@ -822,6 +832,8 @@ exit(-1);
 
     Zoltan_Destroy(&zz_copy);
 
+    driver_timer_end("postmigration_checks_and_zoltan_copy", diagnostic_start);
+    diagnostic_start = driver_timer_begin("final_evaluation");
     /* Evaluate the new balance */
     if (Debug_Driver > 0) {
       if (!Test.Dynamic_Graph){
@@ -840,6 +852,7 @@ exit(-1);
 
       }
     }
+    driver_timer_end("final_evaluation", diagnostic_start);
     if (Test.Gen_Files) {
       /* Write output files. */
       strcpy(fname, pio_info->pexo_fname);
@@ -860,6 +873,7 @@ exit(-1);
 	printf("DRIVER %d DIM: %d BOX: (%e,%e,%e) -- (%e,%e,%e)\n",
 	       Proc, ndim, xmin, ymin, zmin, xmax, ymax, zmax);
     }
+
 
     /* Clean up */
     Zoltan_LB_Free_Part(&import_gids, &import_lids,

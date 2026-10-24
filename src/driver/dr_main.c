@@ -131,6 +131,36 @@ void meminfo_signal_handler(int sig)
 /****************************************************************************/
 /****************************************************************************/
 
+/* Every rank must enter/end each section in the same order.  stderr is
+ * flushed so progress remains visible with redirected batch output. */
+double driver_timer_begin(const char *section)
+{
+  int rank;
+  double start = MPI_Wtime();
+  MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+  if (!rank) {
+    fprintf(stderr, "ZDRIVE TIMER BEGIN %s\n", section);
+    fflush(stderr);
+  }
+  return start;
+}
+
+void driver_timer_end(const char *section, double start)
+{
+  int rank, size;
+  double elapsed = MPI_Wtime() - start, lo, hi, sum;
+  MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+  MPI_Comm_size(MPI_COMM_WORLD, &size);
+  MPI_Reduce(&elapsed, &lo, 1, MPI_DOUBLE, MPI_MIN, 0, MPI_COMM_WORLD);
+  MPI_Reduce(&elapsed, &hi, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
+  MPI_Reduce(&elapsed, &sum, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+  if (!rank) {
+    fprintf(stderr, "ZDRIVE TIMER END %s: min=%.6f mean=%.6f max=%.6f seconds\n",
+            section, lo, sum/size, hi);
+    fflush(stderr);
+  }
+}
+
 int main(int argc, char *argv[])
 {
 /* Local declarations. */
@@ -139,6 +169,7 @@ int main(int argc, char *argv[])
   char  *cmd_file;
   char   cmesg[256]; /* for error messages */
 
+  double driver_start, section_start;
   float  version;
 
   int    Proc, Num_Proc;
@@ -154,6 +185,8 @@ int main(int argc, char *argv[])
 
   /* initialize MPI */
   MPI_Init(&argc, &argv);
+  driver_start = driver_timer_begin("total_after_mpi_init");
+  section_start = driver_timer_begin("driver_initialization");
 
 #ifdef VAMPIR
   VT_initialize(&argc, &argv);
@@ -308,6 +341,8 @@ int main(int argc, char *argv[])
     Zoltan_Set_Param(zz, "OBJ_WEIGHT_DIM", "1");
   }
 
+  driver_timer_end("driver_initialization", section_start);
+
   /* Loop over read and balance for a number of iterations */
   /* (Useful for testing REUSE parameters in Zoltan.) */
   for (iteration = 1; iteration <= Number_Iterations; iteration++) {
@@ -323,12 +358,15 @@ int main(int argc, char *argv[])
      * the mesh struct and the elements array should be filled.
      */
     if (iteration == 1) {
+      section_start = driver_timer_begin("input_total");
       if (!read_mesh(Proc, Num_Proc, &prob, &pio_info, &mesh)) {
         Gen_Error(0, "fatal: Error returned from read_mesh\n");
         error_report(Proc);
         print_output = 0;
         goto End;
       }
+      driver_timer_end("input_total", section_start);
+      section_start = driver_timer_begin("initial_distributed_directory");
       /*
        *  Create a Zoltan DD for tracking elements during repartitioning.
        */
@@ -339,6 +377,7 @@ int main(int argc, char *argv[])
         print_output = 0;
         goto End;
       }
+      driver_timer_end("initial_distributed_directory", section_start);
     }
 
 
@@ -506,6 +545,7 @@ if (iteration == 1) {
   }
 
 End:
+  section_start = driver_timer_begin("cleanup_and_output");
   Zoltan_Destroy(&zz);
   if (mesh.dd) Zoltan_DD_Destroy(&(mesh.dd));
 
@@ -530,6 +570,8 @@ End:
 
   free_mesh_arrays(&mesh);
   if (prob.params != NULL) free(prob.params);
+  driver_timer_end("cleanup_and_output", section_start);
+  driver_timer_end("total_after_mpi_init", driver_start);
   MPI_Finalize();
   
 #ifdef VAMPIR
@@ -668,7 +710,9 @@ char *idtypename;
     fprintf(fp, "\n  Distribute input objects to only %d processes initially.\n", 
              pio->init_dist_procs);
   }
-  if (pio->chunk_reader > 0){
+  if (pio->chunk_reader == 2)
+    fprintf(fp, "\n  Parallel native hypergraph reader (MPI-IO) enabled\n");
+  else if (pio->chunk_reader > 0){
     fprintf(fp, "\n  Initially read input file in chunks (due to file size)\n");
   }
   if (pio->init_dist_type >= 0){

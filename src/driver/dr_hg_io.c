@@ -158,6 +158,7 @@ int read_hypergraph_file(
   char   cmesg[FILENAME_MAX+256];
 
   int    i, distributed_pins = 0, vertex, nextEdge;
+  double diagnostic_start;
   int parallel_hg = (pio_info->chunk_reader == 2), first_edge = 0;
   int    nvtxs = 0, nhedges = 0, npins = 0;
   int    vwgt_dim=0, hewgt_dim=0, vtx, edgeSize;
@@ -202,6 +203,7 @@ int read_hypergraph_file(
     return 0;
   }
 
+  diagnostic_start = driver_timer_begin("input_read_and_parse");
   if (Proc == 0 && !parallel_hg) {
 
     /* Open and read the hypergraph file. */
@@ -370,6 +372,8 @@ int read_hypergraph_file(
    }
  }
 
+  driver_timer_end("input_read_and_parse", diagnostic_start);
+  diagnostic_start = driver_timer_begin("input_distribution");
   MPI_Bcast(&base, 1, MPI_INT, 0, MPI_COMM_WORLD);
 
   if (distributed_pins){
@@ -443,6 +447,8 @@ int read_hypergraph_file(
     }
   }
 
+  driver_timer_end("input_distribution", diagnostic_start);
+  diagnostic_start = driver_timer_begin("driver_mesh_construction");
   /* Initialize mesh structure for Hypergraph. */
   mesh->data_type = ZOLTAN_HYPERGRAPH;
   mesh->num_elems = nvtxs;
@@ -558,6 +564,7 @@ int read_hypergraph_file(
  if (Debug_Driver > 3)
    print_distributed_mesh(Proc, Num_Proc, mesh);
 
+  driver_timer_end("driver_mesh_construction", diagnostic_start);
   DEBUG_TRACE_END(Proc, yo);
   return 1;
 }

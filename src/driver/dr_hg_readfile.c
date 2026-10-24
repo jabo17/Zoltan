@@ -49,6 +49,7 @@
 #include "zoltan.h"
 
 #include "dr_const.h"
+#include "dr_externs.h"
 #include "dr_hg_readfile.h"
 #include "dr_util_const.h"
 #include "dr_compress_const.h"
@@ -316,6 +317,7 @@ int HG_readfile_parallel(const char *filename, int *nv, int *gne, int *np,
   int local_edges = 0, local_weights = 0, *counts = NULL, *displs = NULL;
   int capacity = 0, *pins = NULL;
   long long lines = 0, first = 0, total_lines, total_pins, pin_count, expected, used;
+  double diagnostic_start;
   MPI_File f;
   MPI_Offset body = 0, size = 0, begin, end;
   char *buf = NULL, *line, *stop;
@@ -323,6 +325,7 @@ int HG_readfile_parallel(const char *filename, int *nv, int *gne, int *np,
   *index = *vertex = NULL; *vw = *ew = NULL;
   MPI_Comm_rank(MPI_COMM_WORLD, &rank);
   MPI_Comm_size(MPI_COMM_WORLD, &nranks);
+  diagnostic_start = driver_timer_begin("parallel_header");
   if (!rank) {
     char text[BUF_LEN];
     FILE *in = fopen(filename, "r");
@@ -359,6 +362,8 @@ int HG_readfile_parallel(const char *filename, int *nv, int *gne, int *np,
   MPI_Bcast(&body, 1, MPI_OFFSET, 0, MPI_COMM_WORLD);
   *nv=header[0]; *gne=header[1]; *np=header[2];
   *vd=header[3]; *ed=header[4]; *base=header[5];
+  driver_timer_end("parallel_header", diagnostic_start);
+  diagnostic_start = driver_timer_begin("parallel_file_read");
   if (MPI_File_open(MPI_COMM_WORLD, (char *)filename, MPI_MODE_RDONLY,
                     MPI_INFO_NULL, &f) != MPI_SUCCESS) goto fail;
   MPI_File_set_errhandler(f, MPI_ERRORS_RETURN);
@@ -375,6 +380,8 @@ int HG_readfile_parallel(const char *filename, int *nv, int *gne, int *np,
   if (ok) ok = hg_read_bytes(f, begin, buf, (size_t)(end-begin));
   MPI_File_close(&f);
   if (!hg_all_ok(ok)) goto fail;
+  driver_timer_end("parallel_file_read", diagnostic_start);
+  diagnostic_start = driver_timer_begin("parallel_parse_and_validate");
   buf[end-begin] = 0;
   /* Require terminated records, as the legacy nextstr EOF path drops the
    * last unterminated token.  Reject rather than change that behavior. */
@@ -443,6 +450,8 @@ int HG_readfile_parallel(const char *filename, int *nv, int *gne, int *np,
   if (!rank && *vd) *vw=(float *)malloc((size_t)*nv* *vd*sizeof(float));
   ok = ok && counts && displs && (rank || !*vd || !*nv || *vw);
   if (!hg_all_ok(ok)) goto fail;
+  driver_timer_end("parallel_parse_and_validate", diagnostic_start);
+  diagnostic_start = driver_timer_begin("parallel_vertex_weight_gather");
   /* Only the relatively small vertex-weight array passes through the existing
    * vertex distributor.  No edge or pin array is gathered onto rank zero. */
   local_weights *= *vd;
@@ -456,6 +465,7 @@ int HG_readfile_parallel(const char *filename, int *nv, int *gne, int *np,
   MPI_Gatherv(local_vw, local_weights, MPI_FLOAT, *vw, counts, displs,
               MPI_FLOAT, 0, MPI_COMM_WORLD);
   free(local_vw); free(counts); free(displs);
+  driver_timer_end("parallel_vertex_weight_gather", diagnostic_start);
   *vertex=pins;
   return 1;
 fail:

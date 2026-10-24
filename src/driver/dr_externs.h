@@ -63,6 +63,9 @@ extern int Chaco_In_Assign_Inv;
 extern struct Test_Flags Test;
 extern struct Output_Flags Output;
 extern double Total_Partition_Time;
+/* Diagnostic branch: collective end reports, no entry barriers. */
+extern double driver_timer_begin(const char *section);
+extern void driver_timer_end(const char *section, double start);
 
 #define DEBUG_TRACE_START(proc,yo) \
   if (((proc) == 0 && Debug_Driver > 1) || (Debug_Driver > 2))  \
