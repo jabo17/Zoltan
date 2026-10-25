@@ -992,8 +992,12 @@ int hedge_init_dist_type;
     for (h = 0; h < *gnhedges; h++) {
       if (hedge_init_dist_type == INITIAL_CYCLIC)
 	p = h % num_dist_procs;
-      else if (hedge_init_dist_type == INITIAL_LINEAR)
-	p = (int) ((float) h * (float) num_dist_procs / (float)(*gnhedges));
+      else if (hedge_init_dist_type == INITIAL_LINEAR) {
+        /* Preserve legacy rounding whenever it gives a valid destination. */
+        p = (int) ((float) h * (float) num_dist_procs / (float)(*gnhedges));
+        if (p < 0 || p >= num_dist_procs)
+          p = (int) (((long long) h * num_dist_procs) / (*gnhedges));
+      }
       else if (hedge_init_dist_type == INITIAL_OWNER)
 	p = ch_dist_proc(old_hvertex[old_hindex[h]], assignments, base);
       size[p] += (old_hindex[h+1] - old_hindex[h]);

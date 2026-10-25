@@ -498,9 +498,12 @@ int HG_dist_parallel(PARIO_INFO_PTR pio, int base, int global_edges, int *ne,
     int n=(*index)[h+1]-(*index)[h];
     if (nranks==1) p=0;
     else if (type==INITIAL_CYCLIC) p=(first_edge+h)%ndistrib;
-    else if (type==INITIAL_LINEAR)
-      /* Match the legacy float expression, including its rounding. */
+    else if (type==INITIAL_LINEAR) {
+      /* Preserve legacy rounding whenever it gives a valid destination. */
       p=(int)((float)(first_edge+h)*(float)ndistrib/(float)global_edges);
+      if (p < 0 || p >= ndistrib)
+        p=(int)(((long long)(first_edge+h)*ndistrib)/global_edges);
+    }
     else if (type==INITIAL_OWNER && n)
       p=ch_dist_proc((*vertex)[(*index)[h]], assignments, base);
     else { ok=0; break; } /* Legacy OWNER of an empty edge is undefined. */
