@@ -323,20 +323,12 @@ int main(int argc, char *argv[])
      * the mesh struct and the elements array should be filled.
      */
     if (iteration == 1) {
-      double input_start, input_elapsed, input_max;
-      MPI_Barrier(MPI_COMM_WORLD);
-      input_start = MPI_Wtime();
       if (!read_mesh(Proc, Num_Proc, &prob, &pio_info, &mesh)) {
         Gen_Error(0, "fatal: Error returned from read_mesh\n");
         error_report(Proc);
         print_output = 0;
         goto End;
       }
-      input_elapsed = MPI_Wtime() - input_start;
-      MPI_Reduce(&input_elapsed, &input_max, 1, MPI_DOUBLE, MPI_MAX,
-                 0, MPI_COMM_WORLD);
-      if (Proc == 0)
-        printf("DRIVER:  Input loading time = %g\n", input_max);
       /*
        *  Create a Zoltan DD for tracking elements during repartitioning.
        */
@@ -676,10 +668,7 @@ char *idtypename;
     fprintf(fp, "\n  Distribute input objects to only %d processes initially.\n", 
              pio->init_dist_procs);
   }
-  if (pio->chunk_reader == 2) {
-    fprintf(fp, "\n  Read hypergraph in parallel using MPI-IO\n");
-  }
-  else if (pio->chunk_reader > 0){
+  if (pio->chunk_reader > 0){
     fprintf(fp, "\n  Initially read input file in chunks (due to file size)\n");
   }
   if (pio->init_dist_type >= 0){
